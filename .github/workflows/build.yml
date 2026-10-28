@@ -1,0 +1,33 @@
+name: Build Xiaomi Nabu Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Set up Build Environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev libelf-dev bison flex ccache libgmp-dev libmpc-dev libmpfr-dev
+
+    - name: Download Google Clang Compiler
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/clang
+        git clone --depth=1 https://googlesource.com $GITHUB_WORKSPACE/clang
+
+    - name: Compile Android Kernel
+      run: |
+        export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
+        make O=out ARCH=arm64 vendor/sm8150_defconfig
+        make O=out ARCH=arm64 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error" HOSTCFLAGS="-Wno-error" -j$(nproc)
+
+    - name: Upload Finished Kernel File
+      uses: actions/upload-artifact@v4
+      with:
+        name: Xiaomi_Nabu_Kernel_Image
+        path: out/arch/arm64/boot/Image.gz-dtb
