@@ -1,32 +1,70 @@
-name: Build Xiaomi Nabu Kernel
+
+name: Build Xiaomi Pad 5 KernelSU-Next
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
     steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Build Environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev libelf-dev bison flex ccache libgmp-dev libmpc-dev libmpfr-dev wget tar git
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git make bc bison flex \
+            build-essential libssl-dev libelf-dev \
+            clang-14 lld-14 \
+            gcc-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi \
+            python3 python-is-python3 \
+            cpio rsync gzip patch
 
-    - name: Download Google Clang Compiler
-      run: |
-        git clone --depth=1 https://github.com ~/clang
+      - name: Verify source files
+        run: |
+          test -f build.sh
+          test -f manual-hooks.patch
+          test -f kernel.config
 
-    - name: Compile Android Kernel
-      run: |
-        export PATH=~/clang/bin:$PATH
-        make O=out ARCH=arm64 vendor/sm8150_defconfig
-        make O=out ARCH=arm64 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error" HOSTCFLAGS="-Wno-error" -j$(nproc)
+      - name: Build kernel
+        run: |
+          chmod +x build.sh
+          ./build.sh
 
-    - name: Upload Finished Kernel File
-      uses: actions/upload-artifact@v4
-      with:
-        name: Xiaomi_Nabu_Kernel_Image
-        path: out/arch/arm64/boot/Image.gz-dtb
+      - name: Verify kernel configuration
+        run: |
+          test -s Image.gz
+          gzip -t Image.gz
+          ls -lh Image.gz
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nabu-kernelsu-next
+          path: |
+            Image.gz
+            KernelSU-Next-manager-v3.1.0.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Xiaomi Pad 5 KernelSU-Next ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            Image.gz
+            KernelSU-Next-manager-v3.1.0.apk
+          fail_on_unmatched_files: true
