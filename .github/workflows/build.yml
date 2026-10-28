@@ -13,19 +13,15 @@ jobs:
     - name: Set up Build Environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev libelf-dev bison flex ccache libgmp-dev libmpc-dev libmpfr-dev wget tar
+        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev libelf-dev bison flex ccache libgmp-dev libmpc-dev libmpfr-dev wget tar git
 
     - name: Download Google Clang Compiler
       run: |
-        mkdir -p $GITHUB_WORKSPACE/clang
-        cd $GITHUB_WORKSPACE/clang
-        wget https://googlesource.com
-        tar -xzf clang-r416183b.tar.gz
-        rm -f clang-r416183b.tar.gz
+        git clone --depth=1 https://github.com ~/clang
 
     - name: Compile Android Kernel
       run: |
-        export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
+        export PATH=~/clang/bin:$PATH
         make O=out ARCH=arm64 vendor/sm8150_defconfig
         make O=out ARCH=arm64 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error" HOSTCFLAGS="-Wno-error" -j$(nproc)
 
