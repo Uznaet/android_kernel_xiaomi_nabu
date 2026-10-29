@@ -36,6 +36,7 @@ jobs:
           sudo apt-get install -y bc bison flex libssl-dev libelf-dev ccache \
             lz4 zip git curl python3 cpio device-tree-compiler \
             gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+          sudo apt-get install -y python2 || sudo ln -sf /usr/bin/python3 /usr/local/bin/python2
 
       - name: Clone toolchain
         run: |
@@ -45,6 +46,11 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s ${{ inputs.ksu_setup_arg }}
           ls -la drivers/ | grep -i ksu || true
+
+      - name: Patch KernelSU-Next for 4.14
+        run: |
+          sed -i -E 's/register_trace_prio_([a-z_]+)\(([^,]+), NULL, INT_MIN\)/register_trace_\1(\2, NULL)/' drivers/kernelsu/hook/hook_manager.c
+          grep -n "register_trace" drivers/kernelsu/hook/hook_manager.c || true
 
       - name: Enable KSU in defconfig
         run: |
