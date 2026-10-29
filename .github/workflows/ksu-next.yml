@@ -1,0 +1,88 @@
+name: Build Kernel KSU-Next
+
+on:
+  workflow_dispatch:
+    inputs:
+      defconfig:
+        description: "Defconfig name"
+        required: true
+        default: "nabu_defconfig"
+      ksu_setup_arg:
+        description: "setup.sh argument"
+        required: true
+        default: "legacy"
+      use_kprobes:
+        description: "Use kprobes instead of manual hooks"
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache
+          df -h /
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison flex libssl-dev libelf-dev ccache \
+            lz4 zip git curl python3 cpio device-tree-compiler \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+
+      - name: Clone toolchain
+        run: |
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang $HOME/clang
+
+      - name: Integrate KernelSU-Next
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s ${{ inputs.ksu_setup_arg }}
+          ls -la drivers/ | grep -i ksu || true
+
+      - name: Enable KSU in defconfig
+        run: |
+          CFG=arch/arm64/configs/${{ inputs.defconfig }}
+          echo "CONFIG_KSU=y" >> $CFG
+          echo "# CONFIG_KSU_DEBUG is not set" >> $CFG
+          if [ "${{ inputs.use_kprobes }}" = "true" ]; then
+            echo "CONFIG_MODULES=y" >> $CFG
+            echo "CONFIG_KPROBES=y" >> $CFG
+            echo "CONFIG_HAVE_KPROBES=y" >> $CFG
+            echo "CONFIG_KPROBE_EVENTS=y" >> $CFG
+          fi
+
+      - name: Build
+        run: |
+          export PATH=$HOME/clang/bin:$PATH
+          export ARCH=arm64 SUBARCH=arm64
+          make O=out ${{ inputs.defconfig }}
+          make -j$(nproc) O=out \
+            CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm \
+            OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            CLANG_TRIPLE=aarch64-linux-gnu- 2>&1 | tee build.log
+
+      - name: Package AnyKernel3
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3
+          cp out/arch/arm64/boot/Image* AnyKernel3/ 2>/dev/null || true
+          cp out/arch/arm64/boot/dtb* AnyKernel3/ 2>/dev/null || true
+          cd AnyKernel3
+          rm -rf .git README.md
+          zip -r9 ../Kernel-KSUNext.zip *
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kernel-ksunext
+          path: |
+            Kernel-KSUNext.zip
+            build.log
