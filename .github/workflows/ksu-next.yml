@@ -52,6 +52,15 @@ jobs:
           sed -i -E 's/register_trace_prio_([a-z_]+)\(([^,]+), NULL, INT_MIN\)/register_trace_\1(\2, NULL)/' drivers/kernelsu/hook/hook_manager.c
           grep -n "register_trace" drivers/kernelsu/hook/hook_manager.c || true
 
+      - name: Add stubs for old KernelSU hooks
+        run: |
+          cat >> drivers/kernelsu/compat/kernel_compat.c << 'EOF'
+
+          /* stubs for legacy hooks already present in kernel source */
+          int ksu_handle_vfs_read(void *a, void *b, void *c, void *d) { return 0; }
+          int ksu_handle_devpts(void *inode) { return 0; }
+          EOF
+
       - name: Enable KSU in defconfig
         run: |
           CFG=arch/arm64/configs/${{ inputs.defconfig }}
