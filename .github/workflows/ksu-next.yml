@@ -54,12 +54,14 @@ jobs:
           if [ "${{ inputs.use_kprobes }}" = "true" ]; then
             echo "CONFIG_MODULES=y" >> $CFG
             echo "CONFIG_KPROBES=y" >> $CFG
+            echo "CONFIG_KSU_KPROBE_HOOKS=y" >> $CFG
             echo "CONFIG_HAVE_KPROBES=y" >> $CFG
             echo "CONFIG_KPROBE_EVENTS=y" >> $CFG
           fi
 
       - name: Build
         run: |
+          set -o pipefail
           export PATH=$HOME/clang/bin:$PATH
           export ARCH=arm64 SUBARCH=arm64
           make O=out ${{ inputs.defconfig }}
